@@ -1,0 +1,102 @@
+name: Android Release (Signed) -> Firebase App Distribution
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java (Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Derive version from tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # example tag: v1.2.3+45
+          TAG="${GITHUB_REF_NAME#v}"
+
+          VERSION_NAME="${TAG%%+*}"
+          VERSION_CODE="${TAG##*+}"
+
+          # if tag has no "+", fallback to run number
+          if [[ "${VERSION_CODE}" == "${VERSION_NAME}" ]]; then
+            VERSION_CODE="${GITHUB_RUN_NUMBER}"
+          fi
+
+          echo "VERSION_NAME=${VERSION_NAME}" >> "${GITHUB_ENV}"
+          echo "VERSION_CODE=${VERSION_CODE}" >> "${GITHUB_ENV}"
+
+      - name: Prepare Android signing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+
+          cat > android/key.properties <<'EOF'
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build APK (release)
+        run: |
+          flutter build apk --release \
+            --build-name="${VERSION_NAME}" \
+            --build-number="${VERSION_CODE}"
+
+      - name: Build AAB (release)
+        run: |
+          flutter build appbundle --release \
+            --build-name="${VERSION_NAME}" \
+            --build-number="${VERSION_CODE}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ env.VERSION_NAME }}+${{ env.VERSION_CODE }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Distribute APK to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY_JSON }}
+          groups: qa
+          file: build/app/outputs/flutter-apk/app-release.apk
+          releaseNotes: |
+            Version: ${{ env.VERSION_NAME }}+${{ env.VERSION_CODE }}
+            Commit: ${{ github.sha }}

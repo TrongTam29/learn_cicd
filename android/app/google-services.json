@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "590478227626",
+    "project_id": "learn-cicd-bdbc8",
+    "storage_bucket": "learn-cicd-bdbc8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:590478227626:android:c2caa619e5aea1d5cfb8d3",
+        "android_client_info": {
+          "package_name": "com.example.learn_ci_cd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKDIzolDmTMmESouUJQILFWmlEU7CC-ho"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
